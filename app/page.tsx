@@ -1,103 +1,171 @@
-import Image from "next/image";
+// app/page.tsx
+"use client";
 
-export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+import React, { useState } from "react";
+import { parseAbi } from "viem";
+import {
+  useAccount,
+  useConnect,
+  useDisconnect,
+  useReadContract,
+  useWriteContract,
+} from "wagmi";
+import { injected } from "wagmi/connectors";
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+// ----------------- 1. Contract info -----------------
+const abi = parseAbi([
+  "function donate(uint256 amt) external",
+  "function viewTipsOf(address user) view returns (uint256)",
+]);
+
+// MUST start with NEXT_PUBLIC_
+const CONTRACT_ADDRESS =
+  (process.env.NEXT_PUBLIC_TIPJAR_ADDRESS as `0x${string}`) ??
+  "0x0000000000000000000000000000000000000000";
+
+const ZERO: `0x${string}` =
+  "0x0000000000000000000000000000000000000000";
+
+// ----------------- Component -----------------
+export default function Page() {
+  // 2. Wallet hooks
+  const { address: user } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+
+  // 3. Local state
+  const [amount, setAmount] = useState("1");
+  const [myTips, setMyTips] = useState("");
+
+  // 4. Contract hooks
+  const { writeContractAsync, isPending: sending } = useWriteContract();
+
+  // We'll call refetch manually
+  const { refetch, isFetching } = useReadContract({
+    abi,
+    address: CONTRACT_ADDRESS,
+    functionName: "viewTipsOf",
+    args: [user ?? ZERO],
+    query: { enabled: false },
+  });
+
+  // ----------------- donate() -----------------
+  async function donate() {
+    try {
+      const value = BigInt(amount || "0");
+      if (value === 0n) {
+        alert("Enter a number > 0");
+        return;
+      }
+
+      await writeContractAsync({
+        abi,
+        address: CONTRACT_ADDRESS,
+        functionName: "donate",
+        args: [value],
+      });
+
+      // Optional: clear input
+      // setAmount("1");
+
+      // Auto-refresh after tx
+      await refresh();
+      alert("Donation sent!");
+    } catch (e: any) {
+      alert("Error: " + (e?.message ?? e));
+    }
+  }
+
+  // ----------------- refresh() -----------------
+  async function refresh() {
+    if (!user) {
+      alert("Connect your wallet first");
+      return;
+    }
+    try {
+      // wagmi's refetch doesn't accept args by type, but it works at runtime.
+      const { data } = await refetch({ args: [user] } as any);
+      if (data !== undefined) setMyTips((data as bigint).toString());
+    } catch (e: any) {
+      alert("Error: " + (e?.message ?? e));
+    }
+  }
+
+  // ----------------- UI -----------------
+  if (!user) {
+    return (
+      <main className="min-h-screen bg-white text-gray-900 p-6">
+        <div className="mx-auto max-w-md space-y-8">
+          <h1 className="text-4xl font-bold">Encrypted Tip Jar</h1>
+
+          <div className="space-y-3">
+            <p>Connect your wallet to donate a “hidden” amount.</p>
+            <button
+              className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+              onClick={() => connect({ connector: connectors[0] ?? injected() })}
+            >
+              Connect MetaMask
+            </button>
+          </div>
         </div>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+    );
+  }
+
+  // Connected UI
+  return (
+    <main className="min-h-screen bg-white text-gray-900 p-6">
+      <div className="mx-auto max-w-md space-y-10">
+        <h1 className="text-4xl font-bold">Encrypted Tip Jar</h1>
+
+        {/* Connected */}
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600 break-all">Connected as {user}</p>
+          <button
+            className="rounded bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300"
+            onClick={() => disconnect()}
+          >
+            Disconnect
+          </button>
+        </div>
+
+        {/* Donate */}
+        <section>
+          <h2 className="mb-2 text-2xl font-semibold">Donate</h2>
+          <div className="flex items-center gap-3">
+            <input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-24 rounded border px-2 py-1"
+            />
+            <button
+              disabled={sending || !amount}
+              className="rounded bg-blue-600 px-4 py-1 text-white disabled:opacity-50"
+              onClick={donate}
+            >
+              {sending ? "Sending..." : "Donate"}
+            </button>
+          </div>
+        </section>
+
+        {/* My Tips */}
+        <section>
+          <h2 className="mb-2 mt-8 text-2xl font-semibold">My Tips</h2>
+          <button
+            onClick={refresh}
+            disabled={isFetching}
+            className="rounded bg-green-600 px-3 py-1 text-white disabled:opacity-50 mb-2"
+          >
+            {isFetching ? "Refreshing..." : "Refresh"}
+          </button>
+          <p className="text-xl font-mono">{myTips === "" ? "—" : myTips}</p>
+        </section>
+
+        <small className="block pt-6 text-gray-500">
+          This uses the temporary dummy FHE library (value is stored as a
+          uint256).
+        </small>
+      </div>
+    </main>
   );
 }
