@@ -13,6 +13,12 @@ Verified on Etherscan → <https://sepolia.etherscan.io/address/0xB877666F795aA1
 
 ---
 
+### Live demo
+
+<https://fhe-tipjar.vercel.app>
+
+---
+
 ## Run locally
 
 ```bash
@@ -31,6 +37,7 @@ npm run dev
 Tech stack
 Solidity 0.8.26 · Zama FHEVM · Hardhat
 Next 15 · React 19 · wagmi + viem · Tailwind CSS · Typescript
+@zama-fhe/relayer-sdk (dummy mode, ready for gasless calls)
 
 Roadmap
 Relayer integration (gasless private calls)
